@@ -11,6 +11,17 @@ on:
         - master
       paths: 
         - terraform/**
+    workflow_dispatch:
+      inputs:
+        action:
+          description: 'Action to perform (apply or destroy)'
+          required: true
+          default: 'apply'
+          type: choice
+          options:
+            - apply
+            - destroy
+
 env:
     # credentials for deployment to AWS
     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -21,7 +32,7 @@ env:
 
 jobs:
     terraform:
-        name: "Apply terraform code changes"
+        name: "Apply or Destroy Terraform code"
         runs-on: ubuntu-latest
         defaults:
             run:
@@ -49,19 +60,20 @@ jobs:
 
         - name: Terraform Plan
           id: plan
+          if: github.event.inputs.action == 'apply'
           run: terraform plan -no-color -input=false -out planfile
           continue-on-error: true 
 
         - name: Terraform Plan Status 
-          if: steps.plan.outcome == 'failure'
+          if: steps.plan.outcome == 'failure' && github.event.inputs.action == 'apply'
           run: exit 1
 
         - name: Terraform Apply
           id: apply
-          if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+          if: github.event.inputs.action == 'apply' && github.ref == 'refs/heads/master' && github.event_name == 'push'
           run: terraform apply -auto-approve -input=false -parallelism=1 planfile
 
-
-
-
-        
+        - name: Terraform Destroy
+          id: destroy
+          if: github.event.inputs.action == 'destroy'
+          run: terraform destroy -auto-approve -input=false
